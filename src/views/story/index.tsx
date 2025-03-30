@@ -16,14 +16,17 @@ import {
   Textarea,
   Divider,
   Flex,
+  Link,
 } from '@chakra-ui/react'
 import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd'
 import ReactQuill from 'react-quill'
 import 'react-quill/dist/quill.snow.css'
 import { DFButton } from '../../components/fields/DFButton'
 import { DFTextfield } from '../../components/fields/DFTextfield'
+import { ThreeDotsWave } from '@/components/Loader'
 
-const apiUrl = 'https://testapi-4mdp.onrender.com'
+// const apiUrl = 'https://testapi-4mdp.onrender.com'
+const apiUrl = 'http://localhost:3001'
 
 const StoryBoard = () => {
   const [stories, setStories] = useState<any[]>([])
@@ -32,15 +35,19 @@ const StoryBoard = () => {
   const [description, setDescription] = useState('')
   const [comments, setComments] = useState<string>('')
   const { isOpen, onOpen, onClose } = useDisclosure()
+  const [isPending, setIsPending] = useState(false)
 
   useEffect(() => {
     fetchStories()
   }, [])
 
   const fetchStories = async () => {
+    setIsPending(true)
     const res = await fetch(`${apiUrl}/api/stories`)
     const data = await res.json()
+    setIsPending(false)
     setStories(data)
+    setSelectedStory(data.find((d: any) => d._id === selectedStory._id))
   }
 
   const openModal = (story: any = null) => {
@@ -88,17 +95,19 @@ const StoryBoard = () => {
   }
 
   const handleDragEnd = async (result: any) => {
-    if (!result.destination) return
-    const updatedStories = Array.from(stories)
-    const [movedStory] = updatedStories.splice(result.source.index, 1)
-    movedStory.status = result.destination.droppableId
-    updatedStories.splice(result.destination.index, 0, movedStory)
-    await fetch(`${apiUrl}/api/stories/${movedStory._id}`, {
+    const selectedCard = (stories ?? []).find((it) => it._id === result.draggableId)
+    selectedCard.status = result.destination.droppableId
+    await fetch(`${apiUrl}/api/stories/${selectedCard._id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: movedStory.status }),
+      body: JSON.stringify({ status: selectedCard.status }),
     })
-    setStories(updatedStories)
+    setStories(
+      stories.map((st) => ({
+        ...st,
+        status: st._id === selectedCard._id ? selectedCard.status : st.status,
+      }))
+    )
   }
 
   const getStatusColor = (status: string) => {
@@ -114,6 +123,22 @@ const StoryBoard = () => {
     }
   }
 
+  const isLink = (text: string) => {
+    const urlRegex = /(https?:\/\/[^\s]+)/g
+    return urlRegex.test(text)
+  }
+
+  const CommentText = ({ text }: { text: string }) => {
+    if (isLink(text)) {
+      return (
+        <Link href={text} color='blue.500' isExternal>
+          {text}
+        </Link>
+      )
+    }
+    return <Text>{text}</Text>
+  }
+
   return (
     <Box p={6} bg='gray.50' minH='100vh'>
       <Heading mb={6} textAlign='center' fontSize='2xl'>
@@ -122,6 +147,11 @@ const StoryBoard = () => {
       <Flex alignContent='center' justifyContent='center' mb={6}>
         <DFButton label='New User Story' onClick={() => openModal()} />
       </Flex>
+      {isPending && (
+        <Flex alignContent='center' justifyContent='center' mb={6}>
+          <ThreeDotsWave />
+        </Flex>
+      )}
       <DragDropContext onDragEnd={handleDragEnd}>
         <HStack spacing={4} align='start' justify='center'>
           {['todo', 'in-progress', 'done'].map((status) => (
@@ -152,9 +182,6 @@ const StoryBoard = () => {
                             <Text fontWeight='bold' color='gray.700'>
                               {story.title}
                             </Text>
-                            {/* <Text fontSize="sm" color="gray.500">
-                              {truncateDescription(story.description)}
-                            </Text> */}
                             <Text fontSize='sm' color='gray.500'>
                               Assigned to: {story.assignedTo || 'Unassigned'}
                             </Text>
@@ -183,7 +210,7 @@ const StoryBoard = () => {
               <Heading size='sm'>Comments</Heading>
               {selectedStory?.comments?.map((comment: any, index: number) => (
                 <Box key={index} p={3} bg='gray.100' borderRadius='md'>
-                  <Text>{comment.text}</Text>
+                  <CommentText text={comment} />
                 </Box>
               ))}
               <Textarea placeholder='Add a comment...' value={comments} onChange={(e) => setComments(e.target.value)} />

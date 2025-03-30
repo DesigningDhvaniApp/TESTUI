@@ -56,5 +56,4 @@ class ToastManager {
   }
 }
 
-const toastManager = new ToastManager()
-export default toastManager
+export default new ToastManager()
